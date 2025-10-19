@@ -27,7 +27,7 @@ jobs:
 
       - name: Run Linter
         run: |
-          flake8 --verbose --color auto --count --statistics --format=default --output-file=.flake8-report
+          flake8 --verbose --color auto --count --statistics --format=default --output-file=flake8-report
         shell: bash
 
       - name: Upload Lint Report
@@ -35,7 +35,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lint-report
-          path: .flake8-report
+          path: flake8-report
 
   test:
     name: Execute Test Cases
@@ -65,7 +65,7 @@ jobs:
       - name: Run Tests
         run: |
           pytest tests -vv -rEPW -o pytest_collection_order=alphabetical --cache-clear \
-            --color=yes --html=.pytest-results.html --self-contained-html
+            --color=yes --html=pytest-results.html --self-contained-html
         shell: bash
 
       - name: Upload Test Report
@@ -73,7 +73,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-report-${{ matrix.os }}-${{ matrix.python-version }}
-          path: .pytest-results.html
+          path: pytest-results.html
 
   build:
     name: Build Package
