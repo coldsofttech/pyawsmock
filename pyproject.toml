@@ -7,7 +7,7 @@ name = "pyawsmock"
 version = "0.1.0"
 description = "Local AWS Mock for Python – Mock SSM Parameter Store and extendable AWS services"
 readme = "README.md"
-license = "MIT"
+license = { text = "MIT" }
 authors = [{ name = "coldsofttech" }]
 requires-python = ">=3.10"
 dependencies = [
