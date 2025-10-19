@@ -205,3 +205,13 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# flake8 Report
+.flake8-report
+
+# pytest Report
+.pytest-results.html
+
+# Local IDE, Build & Test
+.idea/
+.test.py
