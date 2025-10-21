@@ -1,7 +1,8 @@
 # Local AWS Mock - Python Package (`pyawsmock`)
 
 A lightweight Python package that **mocks AWS services locally** for development and testing. Currently, supports **AWS
-Systems Manager (SSM) Parameter Store**.
+Systems Manager (SSM) Parameter Store** and **Amazon S3**, including file uploads, downloads, object retrieval, and
+bucket metadata configuration.
 
 This package **extends boto3** and automatically delegates calls to real AWS when the region is not a local mock region.
 
@@ -13,22 +14,43 @@ This package **extends boto3** and automatically delegates calls to real AWS whe
 - **Persistent or Temporary Storage**
     - **Persistent Mode:** Provide a directory path to store the configurations for local mock across sessions.
     - **Temporary Mode:** Uses a temporary directory (`tempfile`) and supports `cleanup()` to remove temporary data.
-- **Versioning & Labels**
-    - Supports multiple versions per SSM parameter.
-    - Mock implementation of labels per version.
-    - Tracks modification history for audit purposes.
-- **SecureString Support**
-    - Values are stored as `base64` encoded strings.
-    - Supports `WithDecryption=True` for retrieval.
-- **Filters & Pagination**
-    - Supports filters (Type, KeyId, Label) for relevant SSM operations.
-    - Handles `MaxResults` and `NextToken` for paginated responses.
 - **Audit History**
     - Tracks the IAM user/role performing operations (currently defaults to `mock-user`).
     - Timestamps modifications for audit purposes.
 - **ARNs & Account IDs**
     - Uses `arn:mock` instead of `arn:aws` to clearly differentiate local mock resources.
     - Default AWS Account ID is `000000000000` for all mock ARNs.
+- **SSM Parameter Store Local Mock**
+    - **Versioning & Labels**
+        - Supports multiple versions per SSM parameter.
+        - Mock implementation of labels per version.
+        - Tracks modification history for audit purposes.
+    - **SecureString Support**
+        - Values are stored as `base64` encoded strings.
+        - Supports `WithDecryption=True` for retrieval.
+    - **Filters & Pagination**
+        - Supports filters (Type, KeyId, Label) for relevant SSM operations.
+        - Handles `MaxResults` and `NextToken` for paginated responses.
+- **S3 Local Mock**
+    - **Buckets & Objects**
+        - Create and manage buckets and objects locally.
+    - **Checksum Support**
+        - Supports `MD5`, `SHA1`, `SHA256`, `CRC32`, `CRC32C`, `CRC64NVME`.
+    - **Upload & Download**
+        - Mimics boto3 `upload_file`, `download_file` with callbacks.
+    - **StreamingBody**
+        - Implements `MockStreamingBody` similar to `botocore`.
+    - **Transfer Simulation**
+        - Supports `MockS3Transfer` and `MockS3TransferConfig` to mimic `S3Transfer` behaviour.
+    - **Bucket Metadata Configuration**
+        - Create, update, retrieve, and delete bucket metadata configuration.
+    - **Object Retrieval**
+        - Supports `get_object` with conditional headers, byte ranges, SSE-C mock headers, and realistic response
+          structure.
+    - **Default Behaviour**
+        - Handles versioning (default to `1`), delete markers, storage class, and request payer defaults.
+    - **Persistent Storage**
+        - Stores uploaded files locally for retrieval and S3-like object metadata.
 
 ## Current Limitations
 
@@ -37,6 +59,9 @@ This package **extends boto3** and automatically delegates calls to real AWS whe
     - CloudTrail
     - IAM (Users, Groups, Roles, Policies - permissions are not enforced)
     - Authentication
+    - S3 Object Lambda
+    - Multi-part downloads via `get_object` or `PartNumber`.
+    - Full versioning support for S3 (local mock uses default version `1`)
 - **Default Assumptions**
     - All operations assume a single mock IAM user (`mock-user`).
     - Regions are either `local-*` for mock or real AWS regions for delegation.
@@ -45,9 +70,10 @@ This package **extends boto3** and automatically delegates calls to real AWS whe
 
 ## Supported Services (Current)
 
-| Service               | Methods                                                                                                                                                                                                  |
-|-----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| SSM (Parameter Store) | `put_parameter`, `get_parameter`, `get_parameters`, `delete_parameter`, `label_parameter_version`, `unlabel_parameter_version`, `describe_parameters`, `get_parameters_by_path`, `get_parameter_history` |
+| Service               | Methods                                                                                                                                                                                                                                                                                          |
+|-----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| SSM (Parameter Store) | `put_parameter`, `get_parameter`, `get_parameters`, `delete_parameter`, `label_parameter_version`, `unlabel_parameter_version`, `describe_parameters`, `get_parameters_by_path`, `get_parameter_history`                                                                                         |
+| S3                    | `create_bucket`, `create_bucket_metadata_configuration`, `get_bucket_metadata_configuration`, `update_bucket_metadata_inventory_table_configuration`, `update_bucket_metadata_journal_table_configuration`, `delete_bucket_metadata_configuration`, `upload_file`, `download_file`, `get_object` |
 
 > Additional AWS services will be supported in future releases.
 
@@ -69,6 +95,7 @@ pip install git+https://github.com/coldsofttech/pyawsmock.git
 
 - `boto3~=1.40.55`
 - `filelock~=3.20.0`
+- `crcmod~=1.7`
 
 > `boto3` is required to delegate calls to real AWS.
 
@@ -101,6 +128,7 @@ cleanup_mock()  # Only applicable for 'temporary' mode
 - Enhanced logging, auditing, and multi-account support.
 - Full AWS API coverage for supported services.
 - Support for Config, CloudTrail, and authentication workflows.
+- Multi-part S3 upload/download and versioning support.
 
 ## License
 

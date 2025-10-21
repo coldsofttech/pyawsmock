@@ -1,3 +1,14 @@
+import re
+
+
+def validate_region(region_name: str) -> bool:
+    if not isinstance(region_name, str):
+        return False
+
+    pattern = r"^local-[a-z]{2}-[a-z]+-\d+$"
+    return bool(re.match(pattern, region_name))
+
+
 class MockBase:
     _supported_methods = []
 

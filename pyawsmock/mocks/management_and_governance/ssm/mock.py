@@ -121,8 +121,7 @@ class MockSSM(MockBase):
         self.lock_path = f"{self.store_path}.lock"
         os.makedirs(self.store_path.parent, exist_ok=True)
         if not self.store_path.exists():
-            with gzip.open(self.store_path, "wb") as f:
-                f.write(json.dumps({}, indent=4).encode("utf-8"))
+            self._write_store({})
 
     def _read_store(self):
         try:
