@@ -11,6 +11,7 @@ def validate_region(region_name: str) -> bool:
 
 class MockBase:
     _supported_methods = []
+    _mock_domain = "pyawsmock.local"
 
     def __getattr__(self, name):
         if name in self._supported_methods:
