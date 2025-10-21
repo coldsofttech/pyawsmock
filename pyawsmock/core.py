@@ -1,13 +1,4 @@
-import re
 from typing import Optional
-
-
-def validate_region(region_name: str) -> bool:
-    if not isinstance(region_name, str):
-        return False
-
-    pattern = r"^local-[a-z]{2}-[a-z]+-\d+$"
-    return bool(re.match(pattern, region_name))
 
 
 def configure_mock(mode: str = "persistent", path: Optional[str] = None):
@@ -24,6 +15,8 @@ def cleanup_mock():
 
 def client(service_name, region_name=None, **kwargs):
     if region_name.startswith("local"):
+        from pyawsmock.mocks.base_mock import validate_region
+
         if validate_region(region_name):
             from pyawsmock.config import config
 
@@ -34,6 +27,10 @@ def client(service_name, region_name=None, **kwargs):
                 from pyawsmock.mocks.management_and_governance.ssm.mock import MockSSM
 
                 return MockSSM(config.base_path, region_name=region_name)
+            elif service_name == "s3":
+                from pyawsmock.mocks.storage.s3.mock import MockS3
+
+                return MockS3(config.base_path)
             else:
                 raise NotImplementedError(f"Local Mock not implemented for {service_name}")
         else:
