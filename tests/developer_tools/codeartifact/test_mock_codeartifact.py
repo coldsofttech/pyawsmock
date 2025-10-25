@@ -1088,15 +1088,30 @@ def test_delete_package_versions_expected_status_mismatch(codeartifact_with_pack
 def test_delete_package_versions_success(codeartifact_with_package_versions):
     ca, domain, repo, package, versions = codeartifact_with_package_versions
     ver = list(versions.keys())[0]
+
     # Force status to "Published"
     versions[ver]["Status"] = "Published"
 
-    result = ca.delete_package_versions(domain=domain, repository=repo, format="npm",
-                                        package=package, versions=[ver], expectedStatus="Published")
+    # Write versions to store explicitly before deletion (to ensure CI persistence)
+    store = ca._read_store()
+    store[domain]["Repositories"][repo]["Packages"][package] = versions
+    ca._write_store(store)
 
+    # Perform deletion
+    result = ca.delete_package_versions(
+        domain=domain,
+        repository=repo,
+        format="npm",
+        package=package,
+        versions=[ver],
+        expectedStatus="Published"
+    )
+
+    # Assertions
     assert ver in result["successfulVersions"]
     assert result["successfulVersions"][ver]["status"] == "Deleted"
-    # Check store is updated
+
+    # Read store again after deletion to verify state
     stored_versions = ca._read_store()[domain]["Repositories"][repo]["Packages"][package]
     assert stored_versions[ver]["Status"] == "Deleted"
 
