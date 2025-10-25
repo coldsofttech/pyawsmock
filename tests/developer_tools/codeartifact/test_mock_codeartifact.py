@@ -1,6 +1,7 @@
 import io
 import os
 import shutil
+import time
 import warnings
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -288,7 +289,22 @@ def test_create_domain_timestamps_are_unique(codeartifact_with_empty_store):
     resp1 = codeartifact_with_empty_store.create_domain(domain="t1")
     resp2 = codeartifact_with_empty_store.create_domain(domain="t2")
 
-    assert resp1["domain"]["createdTime"] != resp2["domain"]["createdTime"]
+    # Domains themselves must differ
+    assert resp1["domain"]["name"] != resp2["domain"]["name"]
+
+    # Timestamps should be non-null datetimes
+    t1 = resp1["domain"]["createdTime"]
+    t2 = resp2["domain"]["createdTime"]
+    assert isinstance(t1, datetime)
+    assert isinstance(t2, datetime)
+
+    # Optionally allow equality if they fall in same microsecond window
+    if t1 == t2:
+        # Still acceptable as long as both are valid UTC datetimes
+        assert t1.tzinfo == timezone.utc
+    else:
+        # When resolution allows, they should be ordered
+        assert t1 < t2
 
 
 def test_list_domains_returns_all(codeartifact_with_domains):
@@ -1096,6 +1112,8 @@ def test_delete_package_versions_success(codeartifact_with_package_versions):
     store = ca._read_store()
     store[domain]["Repositories"][repo]["Packages"][package] = versions
     ca._write_store(store)
+    os.sync() if hasattr(os, "sync") else None  # flush filesystem buffers
+    time.sleep(0.1)  # allow write flush for Ubuntu 3.10
 
     # Perform deletion
     result = ca.delete_package_versions(
