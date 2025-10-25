@@ -1,6 +1,4 @@
 import base64
-import gzip
-import json
 import os
 import re
 import uuid
@@ -9,96 +7,89 @@ from datetime import datetime, timezone
 from typing import Dict, Any
 
 from pyawsmock.mocks.base_mock import MockBase
+from pyawsmock.mocks.store_utils import StoreUtils
 
 
-def validate_parameter_name(name: str):
-    if not name:
-        raise ValueError("Name is required")
-    if len(name) > 1011:
-        raise ValueError("Parameter name exceeds max length (1011 chars)")
-    if not re.match(r"^[a-zA-Z0-9_.\-/]+$", name):
-        raise ValueError("Invalid characters in parameter name")
-    if name.lower().startswith(("/aws", "/ssm", "aws", "ssm")):
-        raise ValueError("Parameter name cannot start with 'aws' or 'ssm'")
-    if name.count("/") > 15:
-        raise ValueError("Parameter hierarchy exceeds max depth (15 levels)")
+class MockSSMValidator:
+    NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_.\-/]+$")
+    TAG_PATTERN = re.compile(r"^[\w\s_.:/=+\-@]+$")
+    KMS_PATTERNS = [
+        re.compile(r"^arn:(aws|mock):kms:[a-z0-9-]+:\d{12}:key/[a-f0-9-]{36}$"),
+        re.compile(r"^alias/[a-zA-Z0-9/_+=,.@-]+$"),
+        re.compile(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"),
+        re.compile(r"^arn:mock:kms:(local(-[a-z0-9-]+)?):\d{12}:key/[a-f0-9-]{36}$"),
+    ]
 
+    @staticmethod
+    def _raise_if(condition, message):
+        if condition:
+            raise ValueError(message)
 
-def validate_parameter_value(value: str, tier: str):
-    if tier == "Standard" and len(value.encode("utf-8")) > 4096:
-        raise ValueError("Standard parameter value exceeds 4KB")
-    if tier == "Advanced" and len(value.encode("utf-8")) > 8192:
-        raise ValueError("Advanced parameter value exceeds 8KB")
+    @classmethod
+    def name(cls, name: str):
+        cls._raise_if(not name, "Name is required")
+        cls._raise_if(len(name) > 1011, "Parameter name exceeds max length (1011 chars)")
+        cls._raise_if(not cls.NAME_PATTERN.match(name), "Invalid characters in parameter name")
+        cls._raise_if(name.lower().startswith(("/aws", "/ssm", "aws", "ssm")),
+                      "Parameter name cannot start with 'aws' or 'ssm'")
+        cls._raise_if(name.count("/") > 15, "Parameter hierarchy exceeds max depth (15 levels)")
 
+    @classmethod
+    def value(cls, value: str, tier: str):
+        cls._raise_if(not value, "Value is required")
+        max_size = 4096 if tier == "Standard" else 8192
+        cls._raise_if(len(value.encode("utf-8")) > max_size,
+                      f"{tier} parameter value exceeds {max_size // 1024}KB")
 
-def validate_parameter_type(type_: str):
-    if type_ not in ["String", "StringList", "SecureString"]:
-        raise ValueError("Invalid type. Supported are: String, StringList, SecureString")
+    @classmethod
+    def type(cls, type_: str):
+        cls._raise_if(type_ not in ["String", "StringList", "SecureString"],
+                      "Invalid type. Supported are: String, StringList, SecureString")
 
+    @classmethod
+    def tier(cls, tier: str):
+        cls._raise_if(tier not in ["Standard", "Advanced", "Intelligent-Tiering"],
+                      "Invalid tier. Supported are: Standard, Advanced, Intelligent-Tiering")
 
-def validate_kms_key_id(key_id: str):
-    arn_pattern = r"^arn:(aws|mock):kms:[a-z0-9-]+:\d{12}:key/[a-f0-9-]{36}$"
-    alias_pattern = r"^alias/[a-zA-Z0-9/_+=,.@-]+$"
-    uuid_pattern = r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
-    local_arn_pattern = r"^arn:mock:kms:(local(-[a-z0-9-]+)?):\d{12}:key/[a-f0-9-]{36}$"
+    @classmethod
+    def data_type(cls, type_: str):
+        cls._raise_if(type_ not in ["text", "aws:ec2:image", "aws:ssm:integration"],
+                      "Invalid data type. Supported are: text, aws:ec2:image, aws:ssm:integration")
 
-    if not (
-            re.match(arn_pattern, key_id)
-            or re.match(alias_pattern, key_id)
-            or re.match(uuid_pattern, key_id)
-            or re.match(local_arn_pattern, key_id)
-    ):
-        raise ValueError(
-            f"Invalid KeyId format: {key_id}. Expected a valid AWS or Mock KMS ARN, alias, or key ID UUID."
+    @classmethod
+    def kms_key(cls, key_id: str):
+        cls._raise_if(
+            not any(p.match(key_id) for p in cls.KMS_PATTERNS),
+            f"Invalid KeyId format: {key_id}. Expected AWS/Mock KMS ARN, alias, or UUID."
         )
 
+    @classmethod
+    def tags(cls, tags):
+        if tags is None:
+            return
+        cls._raise_if(not isinstance(tags, list), "Tags must be a list of dictionaries")
 
-def validate_tags(tags):
-    if tags is None:
-        return
+        seen_keys = set()
+        for tag in tags:
+            cls._raise_if(not isinstance(tag, dict), f"Invalid tag type: {type(tag)}. Expected dict.")
+            key, value = tag.get("Key"), tag.get("Value")
+            cls._raise_if(key is None or value is None, "Each tag must contain 'Key' and 'Value'")
+            cls._validate_tag_field("Key", key, 128, seen_keys)
+            cls._validate_tag_field("Value", value, 256)
 
-    if not isinstance(tags, list):
-        raise ValueError("Tags must be a list of dictionaries")
-
-    seen_keys = set()
-    tag_pattern = re.compile(r"^[\w\s_.:/=+\-@]+$")
-
-    for tag in tags:
-        if not isinstance(tag, dict):
-            raise ValueError(f"Invalid tag type: {type(tag)}. Expected a dictionary.")
-
-        key = tag.get("Key")
-        value = tag.get("Value")
-
-        if key is None or value is None:
-            raise ValueError("Each tag must contain 'Key' and 'Value'")
-
-        if not isinstance(key, str):
-            raise ValueError(f"Tag Key must be a string: {key}")
-        if len(key) == 0 or len(key) > 128:
-            raise ValueError(f"Tag Key must be between 1 and 128 characters: {key}")
-        if not tag_pattern.match(key):
-            raise ValueError(f"Tag Key contains invalid characters: {key}")
-        if key in seen_keys:
-            raise ValueError(f"Duplicate Tag Key found: {key}")
-        seen_keys.add(key)
-
-        if not isinstance(value, str):
-            raise ValueError(f"Tag Value must be a string for Key '{key}'")
-        if len(value) > 256:
-            raise ValueError(f"Tag Value exceeds 256 characters for Key '{key}'")
-        if not tag_pattern.match(value) and value != "":
-            raise ValueError(f"Tag Value contains invalid characters: {value}")
+    @classmethod
+    def _validate_tag_field(cls, field_name, value, max_len, seen_keys=None):
+        cls._raise_if(not isinstance(value, str), f"Tag {field_name} must be a string")
+        if field_name == "Key":
+            cls._raise_if(value in seen_keys, f"Duplicate Tag Key found: {value}")
+            seen_keys.add(value)
+        cls._raise_if(not value and field_name == "Key", f"Tag {field_name} cannot be empty")
+        cls._raise_if(len(value) > max_len, f"Tag {field_name} exceeds {max_len} characters")
+        cls._raise_if(value != "" and not cls.TAG_PATTERN.match(value),
+                      f"Tag {field_name} contains invalid characters: {value}")
 
 
-def validate_parameter_tier(tier: str):
-    if tier not in ["Standard", "Advanced", "Intelligent-Tiering"]:
-        raise ValueError("Invalid tier. Supported are: Standard, Advanced, or Intelligent-Tiering")
-
-
-def validate_parameter_data_type(type_: str):
-    if type_ not in ["text", "aws:ec2:image", "aws:ssm:integration"]:
-        raise ValueError("Invalid data type. Supported are: text, aws:ec2:image or aws:ssm")
+Validator = MockSSMValidator
 
 
 class MockSSM(MockBase):
@@ -124,67 +115,87 @@ class MockSSM(MockBase):
             self._write_store({})
 
     def _read_store(self):
-        try:
-            with gzip.open(self.store_path, "rb") as f:
-                return json.loads(f.read().decode("utf-8"))
-        except FileNotFoundError:
-            return {}
+        return StoreUtils.read_json_gzip(self.store_path)
 
     def _write_store(self, data):
-        from filelock import FileLock
+        StoreUtils.write_json_gzip(self.store_path, data, self.lock_path)
 
-        lock = FileLock(self.lock_path)
-        with lock:
-            with gzip.open(self.store_path, "wb") as f:
-                f.write(json.dumps(data, indent=4).encode("utf-8"))
+    def _decode_secure_value(self, value, param_type, with_decryption):
+        if param_type == "SecureString" and with_decryption:
+            value = base64.b64decode(value.encode()).decode()
+        return value
 
-    def put_parameter(self, **kwargs) -> Dict[str, Any]:
-        name = kwargs.get("Name")
-        description = kwargs.get("Description")
-        value = kwargs.get("Value")
-        type_ = kwargs.get("Type", "String")
-        key_id = kwargs.get("KeyId")
-        overwrite = kwargs.get("Overwrite", False)
-        allowed_pattern = kwargs.get("AllowedPattern")
-        tags = kwargs.get("Tags", [])
-        tier = kwargs.get("Tier", "Standard")
-        policies = kwargs.get("Policies")
-        data_type = kwargs.get("DataType", "text")
+    def _apply_filters(self, params, filters):
+        if not filters:
+            return params
 
-        if name is None:
-            raise ValueError("Missing required parameters: Name")
-        if value is None:
-            raise ValueError("Missing required parameters: Value")
+        def match_param(param, f):
+            key = f.get("Key")
+            option = f.get("Option", "Equals")
+            values = f.get("Values", [])
 
-        validate_parameter_name(name)
-        validate_parameter_tier(tier)
-        validate_parameter_type(type_)
-        validate_parameter_value(value, tier)
-        validate_parameter_data_type(data_type)
-        validate_tags(tags)
-
-        if allowed_pattern and not re.match(allowed_pattern, value):
-            raise ValueError(f"Value does not match AllowedPattern: {allowed_pattern}")
-
-        if type_ == "SecureString":
-            if not key_id:
-                raise ValueError("KMS Key Id is required when using SecureString")
+            if key == "Label":
+                param_value = []
+                for v in param["Versions"].values():
+                    param_value.extend(v.get("Labels", []))
             else:
-                validate_kms_key_id(key_id)
+                param_value = param.get(key)
+                if param_value is None:
+                    return False
 
-            value = base64.b64encode(value.encode()).decode()
+            for v in values:
+                if key == "Label" and option == "Equals" and v in param_value:
+                    return True
+                elif key != "Label":
+                    if option == "Equals" and param_value == v:
+                        return True
+                    elif option == "BeginsWith" and str(param_value).startswith(v):
+                        return True
+                    elif option == "Contains" and v in str(param_value):
+                        return True
+            return False
 
-        data_store = self._read_store()
-        existing = data_store.get(name)
-        if existing and not overwrite:
-            raise ValueError(f"Parameter '{name}' already exists. Use Overwrite=True to overwrite.")
+        filtered = []
+        for param in params:
+            if all(match_param(param, f) for f in filters):
+                filtered.append(param)
+        return filtered
 
-        if existing:
-            latest_version = max(int(v) for v in existing["Versions"].keys())
-            version = latest_version + 1
+    def _paginate_list(self, items, max_results=None, next_token=None):
+        try:
+            start_index = int(next_token) if next_token is not None else 0
+        except ValueError:
+            start_index = 0
+
+        end_index = len(items)
+        if max_results is not None:
+            end_index = min(start_index + max_results, len(items))
+            next_token = str(end_index) if end_index < len(items) else None
         else:
-            version = 1
+            next_token = None
+        return items[start_index:end_index], next_token
 
+    def _get_latest_version(self, param, selector=None):
+        if selector is None:
+            latest_version = max(param["Versions"].keys())
+            return param["Versions"][latest_version]
+        return None
+
+    def _get_version_data(self, param, version):
+        versions = param.get("Versions", {})
+        if not versions:
+            raise ValueError(f"No versions found for parameter '{param['Name']}'")
+        if version is None:
+            version = max(int(v) for v in versions.keys())
+        if version not in map(int, versions.keys()):
+            raise ValueError(f"Version {version} does not exist for parameter '{param['Name']}'")
+        return versions[f"{version}"], version, versions
+
+    def _create_and_update_param(self, data_store, name, value, kwargs):
+        existing = data_store.get(name)
+        if existing and not kwargs.get("Overwrite", False):
+            raise ValueError(f"Parameter {name} already exists")
+        version = (max(map(int, existing["Versions"])) + 1) if existing else 1
         version_entry = {
             "Value": value,
             "Labels": [],
@@ -193,60 +204,94 @@ class MockSSM(MockBase):
             "LastModifiedUser": "arn:mock:iam::000000000000:user/local-mock",
         }
 
+        meta = {
+            "Name": name,
+            "Description": kwargs.get("Description"),
+            "Value": value,
+            "Type": kwargs.get("Type", "String"),
+            "KeyId": kwargs.get("KeyId"),
+            "AllowedPattern": kwargs.get("AllowedPattern"),
+            "Tags": kwargs.get("Tags", []),
+            "Tier": kwargs.get("Tier", "Standard"),
+            "Policies": kwargs.get("Policies"),
+            "DataType": kwargs.get("DataType", "text"),
+            "ARN": f"arn:mock:ssm:{self.region_name}:000000000000:parameter/{name.lstrip('/')}",
+            "Selector": None,
+            "SourceResult": None,
+            "RequestId": str(uuid.uuid4()),
+        }
+
         if existing:
             existing["Versions"][version] = version_entry
-            existing.update({
-                "Description": description,
-                "Type": type_,
-                "KeyId": key_id,
-                "AllowedPattern": allowed_pattern,
-                "Tags": tags or [],
-                "Tier": tier,
-                "Policies": policies,
-                "DataType": data_type,
-                "ARN": f"arn:mock:ssm:{self.region_name}:000000000000:parameter/{name.lstrip('/')}",
-                "Selector": None,
-                "SourceResult": None,
-                "RequestId": str(uuid.uuid4()),
-            })
+            existing.update(meta)
             data_store[name] = existing
         else:
-            data_store[name] = {
-                "Name": name,
-                "Description": description,
-                "Value": value,
-                "Type": type_,
-                "KeyId": key_id,
-                "AllowedPattern": allowed_pattern,
-                "Tags": tags or [],
-                "Tier": tier,
-                "Policies": policies,
-                "DataType": data_type,
-                "Versions": {version: version_entry},
-                "ARN": f"arn:mock:ssm:{self.region_name}:000000000000:parameter/{name.lstrip('/')}",
-                "Selector": None,
-                "SourceResult": None,
-                "RequestId": str(uuid.uuid4()),
-            }
+            data_store[name] = {**meta, "Versions": {version: version_entry}}
 
+        return data_store, version_entry
+
+    def _get_param_version(self, param, selector):
+        if not selector:
+            latest_version = max(map(int, param["Versions"]))
+            return param["Versions"][str(latest_version)]
+
+        if selector.isdigit():
+            v = int(selector)
+            if str(v) not in param["Versions"]:
+                raise ValueError(f"Version {v} not found")
+            return param["Versions"][str(v)]
+
+        # Label lookup
+        for vdata in param["Versions"].values():
+            if selector in vdata.get("Labels", []):
+                return vdata
+        raise ValueError(f"Label {selector} not found")
+
+    def put_parameter(self, **kwargs) -> Dict[str, Any]:
+        name = kwargs.get("Name")
+        value = kwargs.get("Value")
+        type_ = kwargs.get("Type", "String")
+        key_id = kwargs.get("KeyId")
+        allowed_pattern = kwargs.get("AllowedPattern")
+        tags = kwargs.get("Tags", [])
+        tier = kwargs.get("Tier", "Standard")
+        data_type = kwargs.get("DataType", "text")
+
+        Validator.name(name)
+        Validator.tier(tier)
+        Validator.value(value, tier)
+        Validator.type(type_)
+        Validator.data_type(data_type)
+        Validator.tags(tags)
+
+        if allowed_pattern and not re.match(allowed_pattern, value):
+            raise ValueError(f"Value does not match AllowedPattern: {allowed_pattern}")
+
+        if type_ == "SecureString":
+            if not key_id:
+                raise ValueError("KMS Key Id is required when using SecureString")
+            Validator.kms_key(key_id)
+            value = base64.b64encode(value.encode()).decode()
+
+        data_store = self._read_store()
+        data_store, version_entry = self._create_and_update_param(data_store, name, value, kwargs)
         self._write_store(data_store)
 
         return {
-            "Version": version,
+            "Version": version_entry["Version"],
             "Tier": tier
         }
 
     def get_parameter(self, **kwargs) -> Dict[str, Any]:
         name = kwargs.get("Name")
         with_decryption = kwargs.get("WithDecryption", False)
-
         if not name:
-            raise ValueError("Missing required parameters: Name")
+            raise ValueError("Name is required")
 
         arn_pattern = r"^arn:(aws|mock):ssm:[a-z0-9-]+:\d{12}:parameter(/.+)$"
         match = re.match(arn_pattern, name)
         if match:
-            name = match.group(2).lstrip("/")
+            name = match.group(2)
 
         selector = None
         if ":" in name:
@@ -254,36 +299,11 @@ class MockSSM(MockBase):
 
         data_store = self._read_store()
         param = data_store.get(name)
-
         if not param:
             raise ValueError(f"Parameter '{name}' not found in region '{self.region_name}'")
 
-        if selector:
-            if selector.isdigit():
-                version = int(selector)
-                if version not in param["Versions"]:
-                    raise ValueError(f"Version {selector} not found for parameter '{name}'")
-                param_version = param["Versions"][version]
-            else:
-                found = None
-                for ver, vdata in param["Versions"].items():
-                    if selector in vdata.get("Labels", []):
-                        found = vdata
-                        break
-                if not found:
-                    raise ValueError(f"Label {selector} not found for parameter '{name}'")
-                param_version = found
-        else:
-            latest_version = max(param["Versions"])
-            param_version = param["Versions"][latest_version]
-
-        value = param_version["Value"]
-        if param["Type"] == "SecureString":
-            if with_decryption:
-                try:
-                    value = base64.b64decode(value.encode()).decode()
-                except Exception as e:
-                    raise ValueError(f"Failed to decode value: {e}")
+        param_version = self._get_param_version(param, selector)
+        value = self._decode_secure_value(param_version["Value"], param["Type"], with_decryption)
 
         return {
             "Parameter": {
@@ -293,7 +313,7 @@ class MockSSM(MockBase):
                 "Version": param_version.get("Version", 1),
                 "Selector": f"{param['Name']}:{selector}" if selector else None,
                 "SourceResult": None,
-                "LastModifiedDate": datetime.fromisoformat(param_version.get("LastModifiedDate", None)),
+                "LastModifiedDate": datetime.fromisoformat(param_version.get("LastModifiedDate")),
                 "ARN": param["ARN"],
                 "DataType": param.get("DataType", "text"),
             }
@@ -302,13 +322,10 @@ class MockSSM(MockBase):
     def get_parameters(self, **kwargs) -> Dict[str, Any]:
         names = kwargs.get("Names")
         with_decryption = kwargs.get("WithDecryption", False)
-
         if not names or not isinstance(names, list):
             raise ValueError("Names must be a non-empty list of parameter names or ARNs")
 
-        response_params = []
-        invalid_params = []
-
+        response_params, invalid_params = [], []
         for name in names:
             try:
                 param_response = self.get_parameter(Name=name, WithDecryption=with_decryption)
@@ -330,80 +347,25 @@ class MockSSM(MockBase):
         with_decryption = kwargs.get("WithDecryption", False)
         max_results = kwargs.get("MaxResults")
         next_token = kwargs.get("NextToken")
-
         if not path or not path.startswith("/"):
             raise ValueError("Path must start with '/'")
 
-        data_store = self._read_store()
-        all_params = list(data_store.values())
-        matching_params = []
+        all_params = list(self._read_store().values())
+        matching_params = [
+            p for p in all_params
+            if (p["Name"].startswith(path) if recursive else "/" not in p["Name"][len(path):].lstrip("/"))
+        ]
 
-        for param in all_params:
-            param_name = param["Name"]
-            if recursive:
-                if param_name.startswith(path):
-                    matching_params.append(param)
-            else:
-                if param_name.startswith(path):
-                    remaining = param_name[len(path):].lstrip("/")
-                    if "/" not in remaining:
-                        matching_params.append(param)
+        filtered_params = self._apply_filters(matching_params, param_filters)
+        filtered_params.sort(key=lambda x: x["Name"])
 
-        if param_filters:
-            filtered_params = []
-            for param in matching_params:
-                include = True
-                for f in param_filters:
-                    key = f.get("Key")
-                    option = f.get("Option", "Equals")
-                    values = f.get("Values", [])
-
-                    param_value = None
-                    if key == "Label":
-                        param_value = []
-                        for v in param["Versions"].values():
-                            param_value.extend(v.get("Labels", []))
-                    else:
-                        param_value = param.get(key)
-
-                    match = False
-                    for v in values:
-                        if key == "Label":
-                            if option == "Equals" and v in param_value:
-                                match = True
-                                break
-                        else:
-                            if option == "Equals" and param_value == v:
-                                match = True
-                                break
-                            elif option == "BeginsWith" and str(param_value).startswith(v):
-                                match = True
-                                break
-                    if not match:
-                        include = False
-                        break
-                if include:
-                    filtered_params.append(param)
-            matching_params = filtered_params
-
-        matching_params.sort(key=lambda x: x["Name"])
-
-        start_index = int(next_token) if next_token else 0
-        end_index = len(matching_params)
-        if max_results is not None:
-            end_index = min(start_index + max_results, len(matching_params))
-            next_token = str(end_index) if end_index < len(matching_params) else None
-        else:
-            next_token = None
+        page, next_token = self._paginate_list(filtered_params, max_results, next_token)
 
         response_list = []
-        for p in matching_params[start_index:end_index]:
+        for p in page:
             latest_version = max(p["Versions"].keys())
             version_data = p["Versions"][latest_version]
-
-            value = version_data["Value"]
-            if p["Type"] == "SecureString" and with_decryption:
-                value = base64.b64decode(value.encode()).decode()
+            value = self._decode_secure_value(version_data["Value"], p["Type"], with_decryption)
 
             response_list.append({
                 "Name": p["Name"],
@@ -427,31 +389,19 @@ class MockSSM(MockBase):
         with_decryption = kwargs.get("WithDecryption", False)
         max_results = kwargs.get("MaxResults")
         next_token = kwargs.get("NextToken")
-
         if not name:
             raise ValueError("Name is required")
 
-        data_store = self._read_store()
-        param = data_store.get(name)
+        param = self._read_store().get(name)
         if not param:
             raise ValueError(f"Parameter '{name}' not found")
 
         versions = sorted(param.get("Versions", {}).items(), key=lambda x: x[0], reverse=True)
-
-        start_index = int(next_token) if next_token else 0
-        end_index = len(versions)
-        if max_results is not None:
-            end_index = min(start_index + max_results, len(versions))
-            next_token = str(end_index) if end_index < len(versions) else None
-        else:
-            next_token = None
+        page, next_token = self._paginate_list(versions, max_results, next_token)
 
         response_list = []
-        for version_num, version_data in versions[start_index:end_index]:
-            value = version_data["Value"]
-            if param["Type"] == "SecureString" and with_decryption:
-                value = base64.b64decode(value.encode()).decode()
-
+        for version_num, version_data in page:
+            value = self._decode_secure_value(version_data["Value"], param["Type"], with_decryption)
             response_list.append({
                 "Name": param["Name"],
                 "Type": param["Type"],
@@ -488,26 +438,17 @@ class MockSSM(MockBase):
         if not param:
             raise ValueError(f"Parameter '{name}' not found")
 
-        versions = param.get("Versions", {})
-        if not versions:
-            raise ValueError(f"No versions found for parameter '{name}'")
-
-        if parameter_version is None:
-            version = max(int(v) for v in versions.keys())
-        else:
-            version = int(parameter_version)
-            if version not in map(int, versions.keys()):
-                raise ValueError(f"Version {version} does not exist for parameter '{name}'")
+        version_data, version, versions = self._get_version_data(param, parameter_version)
 
         invalid_labels = []
         for label in labels:
             if not isinstance(label, str) or not label or not re.match(r'^[a-zA-Z0-9_.-]+$', label):
                 invalid_labels.append(label)
                 continue
+            if label not in version_data.setdefault("Labels", []):
+                version_data["Labels"].append(label)
 
-            if label not in versions[f"{version}"].get("Labels", []):
-                versions[f"{version}"].setdefault("Labels", []).append(label)
-
+        versions[str(version)] = version_data
         data_store[name]["Versions"] = versions
         self._write_store(data_store)
 
@@ -528,21 +469,18 @@ class MockSSM(MockBase):
         if not labels or not isinstance(labels, list):
             raise ValueError("Labels must be a non-empty list")
 
+        labels = list(dict.fromkeys(labels))
         data_store = self._read_store()
         param = data_store.get(name)
         if not param:
             raise ValueError(f"Parameter '{name}' not found")
 
-        versions = param.get("Versions", {})
-        if int(parameter_version) not in map(int, versions.keys()):
-            raise ValueError(f"Version {parameter_version} does not exist for parameter '{name}'")
-
-        version_data = versions[f"{parameter_version}"]
-        existing_labels = version_data.get("Labels", [])
+        version_data, version, versions = self._get_version_data(param, parameter_version)
 
         removed_labels = []
         invalid_labels = []
 
+        existing_labels = version_data.get("Labels", [])
         for label in labels:
             if label in existing_labels:
                 existing_labels.remove(label)
@@ -551,7 +489,7 @@ class MockSSM(MockBase):
                 invalid_labels.append(label)
 
         version_data["Labels"] = existing_labels
-        versions[parameter_version] = version_data
+        versions[str(version)] = version_data
         data_store[name]["Versions"] = versions
         self._write_store(data_store)
 
@@ -562,7 +500,6 @@ class MockSSM(MockBase):
 
     def delete_parameter(self, **kwargs) -> dict:
         name = kwargs.get("Name")
-
         if not name:
             raise ValueError("Name is required")
 
@@ -576,13 +513,10 @@ class MockSSM(MockBase):
 
     def delete_parameters(self, **kwargs) -> Dict[str, Any]:
         names = kwargs.get("Names")
-
         if not names or not isinstance(names, list):
             raise ValueError("Names must be a non-empty list of parameter names")
 
-        deleted_params = []
-        invalid_params = []
-
+        deleted_params, invalid_params = [], []
         for name in names:
             try:
                 self.delete_parameter(Name=name)
@@ -600,62 +534,17 @@ class MockSSM(MockBase):
         max_results = kwargs.get("MaxResults")
         next_token = kwargs.get("NextToken")
         shared = kwargs.get("Shared", False)
-
         if shared:
             warnings.warn("Shared is not supported in local mock")
 
-        data_store = self._read_store()
-        all_params = list(data_store.values())
-
-        filtered_params = []
-        for param in all_params:
-            include = True
-            if param_filters:
-                for f in param_filters:
-                    key = f.get("Key")
-                    option = f.get("Option", "Equals")
-                    values = f.get("Values", [])
-
-                    param_value = param.get(key)
-                    if param_value is None:
-                        include = False
-                        break
-
-                    match = False
-                    for v in values:
-                        if option == "Equals" and param_value == v:
-                            match = True
-                            break
-                        elif option == "BeginsWith" and str(param_value).startswith(v):
-                            match = True
-                            break
-                        elif option == "Contains" and v in str(param_value):
-                            match = True
-                            break
-                    if not match:
-                        include = False
-                        break
-            if include:
-                filtered_params.append(param)
-
+        all_params = list(self._read_store().values())
+        filtered_params = self._apply_filters(all_params, param_filters)
         filtered_params.sort(key=lambda x: x["Name"])
 
-        start_index = 0
-        if next_token:
-            try:
-                start_index = int(next_token)
-            except ValueError:
-                start_index = 0
-
-        end_index = len(filtered_params)
-        if max_results is not None:
-            end_index = min(start_index + max_results, len(filtered_params))
-            next_token = str(end_index) if end_index < len(filtered_params) else None
-        else:
-            next_token = None
+        page, next_token = self._paginate_list(filtered_params, max_results, next_token)
 
         response_list = []
-        for p in filtered_params[start_index:end_index]:
+        for p in page:
             latest_version = max(p["Versions"].keys())
             version_data = p["Versions"][latest_version]
 
@@ -664,7 +553,7 @@ class MockSSM(MockBase):
                 "ARN": p["ARN"],
                 "Type": p["Type"],
                 "KeyId": p.get("KeyId"),
-                "LastModifiedDate": version_data["LastModifiedDate"],
+                "LastModifiedDate": version_data.get("LastModifiedDate"),
                 "LastModifiedUser": version_data.get("LastModifiedUser"),
                 "Description": p.get("Description"),
                 "AllowedPattern": p.get("AllowedPattern"),
