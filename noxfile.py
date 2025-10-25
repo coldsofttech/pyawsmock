@@ -27,6 +27,7 @@ def lint(session):
 
 @nox.session(python=PYTHON_VERSION)
 def test(session):
+    build(session)
     print("🧪 Running tests")
     try:
         os.remove(".pytest-results.html")

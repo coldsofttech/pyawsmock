@@ -14,7 +14,15 @@ def cleanup_mock():
 
 
 def client(service_name, region_name=None, **kwargs):
-    if region_name.startswith("local"):
+    if service_name in ["cloudfront"] and region_name and region_name.startswith("local"):
+        from pyawsmock.config import config
+
+        if not config.active:
+            raise RuntimeError("Mock not configured. Call configure_mock() first.")
+        from pyawsmock.mocks.networking_and_content_delivery.cloudfront.mock import MockCloudFront
+
+        return MockCloudFront(config.base_path)
+    elif region_name.startswith("local"):
         from pyawsmock.mocks.base_mock import validate_region
 
         if validate_region(region_name):

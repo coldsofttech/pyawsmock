@@ -1,3 +1,3 @@
-boto3~=1.40.55
+boto3~=1.40.59
 filelock~=3.20.0
 crcmod~=1.7
