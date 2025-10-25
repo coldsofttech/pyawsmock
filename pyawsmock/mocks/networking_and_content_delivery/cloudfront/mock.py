@@ -3,7 +3,7 @@ import re
 import uuid
 import warnings
 from datetime import datetime, timezone
-from hashlib import sha1
+from hashlib import sha256
 from typing import Dict, Any
 
 from pyawsmock.mocks.base_mock import MockBase
@@ -134,7 +134,7 @@ class MockCloudFront(MockBase):
                     raise ValueError("CloudFrontOriginAccessIdentity already exists")
 
         identity_id = "E" + str(uuid.uuid4()).replace("-", "")[:12].upper()
-        s3_canonical_user_id = sha1(str(uuid.uuid4()).encode()).hexdigest()
+        s3_canonical_user_id = sha256(uuid.uuid4().bytes).hexdigest()
         etag = str(uuid.uuid4())
 
         identity = {
