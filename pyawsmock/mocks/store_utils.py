@@ -1,5 +1,6 @@
 import gzip
 import json
+import os
 
 from filelock import FileLock
 
@@ -19,3 +20,5 @@ class StoreUtils:
         with lock:
             with gzip.open(path, "wb") as f:
                 f.write(json.dumps(data, indent=4).encode("utf-8"))
+                f.flush()
+                os.fsync(f.fileno())
