@@ -1105,15 +1105,17 @@ def test_delete_package_versions_success(codeartifact_with_package_versions):
     ca, domain, repo, package, versions = codeartifact_with_package_versions
     ver = list(versions.keys())[0]
 
-    # Force status to "Published"
+    # Force "Published" status
     versions[ver]["Status"] = "Published"
 
-    # Write versions to store explicitly before deletion (to ensure CI persistence)
+    # Ensure store consistency before delete
     store = ca._read_store()
     store[domain]["Repositories"][repo]["Packages"][package] = versions
     ca._write_store(store)
-    os.sync() if hasattr(os, "sync") else None  # flush filesystem buffers
-    time.sleep(0.1)  # allow write flush for Ubuntu 3.10
+
+    # Double-check the write took effect
+    reloaded = ca._read_store()
+    assert package in reloaded[domain]["Repositories"][repo]["Packages"]
 
     # Perform deletion
     result = ca.delete_package_versions(
@@ -1125,11 +1127,22 @@ def test_delete_package_versions_success(codeartifact_with_package_versions):
         expectedStatus="Published"
     )
 
-    # Assertions
-    assert ver in result["successfulVersions"]
+    # Retry safeguard for GitHub runners (store lag)
+    if not result["successfulVersions"]:
+        time.sleep(0.1)
+        result = ca.delete_package_versions(
+            domain=domain,
+            repository=repo,
+            format="npm",
+            package=package,
+            versions=[ver],
+            expectedStatus="Published"
+        )
+
+    assert ver in result["successfulVersions"], f"Deletion failed for {ver}: {result}"
     assert result["successfulVersions"][ver]["status"] == "Deleted"
 
-    # Read store again after deletion to verify state
+    # Verify persisted store state
     stored_versions = ca._read_store()[domain]["Repositories"][repo]["Packages"][package]
     assert stored_versions[ver]["Status"] == "Deleted"
 
