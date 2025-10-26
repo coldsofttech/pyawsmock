@@ -881,7 +881,7 @@ def test_visibility_timeout(sqs_with_empty_store):
     queue_url = sqs_with_empty_store.create_queue(
         QueueName="timeout-queue",
         Attributes={
-            "VisibilityTimeout": 1
+            "VisibilityTimeout": 10
         },
     )["QueueUrl"]
     sqs_with_empty_store.send_message(QueueUrl=queue_url, MessageBody="Test")
@@ -889,7 +889,7 @@ def test_visibility_timeout(sqs_with_empty_store):
     resp1 = sqs_with_empty_store.receive_message(QueueUrl=queue_url)
     assert len(resp1["Messages"]) == 1
 
-    time.sleep(1.1)
+    time.sleep(11)
     resp3 = sqs_with_empty_store.receive_message(QueueUrl=queue_url)
     assert len(resp3["Messages"]) == 1
     assert resp3["Messages"][0]["Attributes"]["ApproximateReceiveCount"] == "2"
