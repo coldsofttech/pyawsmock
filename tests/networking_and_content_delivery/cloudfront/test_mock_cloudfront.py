@@ -5,6 +5,8 @@ import pytest
 
 from pyawsmock.mocks.networking_and_content_delivery.cloudfront.mock import MockCloudFront
 
+pytestmark = pytest.mark.order(4)
+
 
 @pytest.fixture
 def mock_cloudfront(tmp_path):

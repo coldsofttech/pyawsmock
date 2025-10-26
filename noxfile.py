@@ -34,7 +34,7 @@ def test(session):
     except FileNotFoundError:
         pass
 
-    session.install("pytest", "pytest-html")
+    session.install("pytest", "pytest-html", "pytest-order", "pytest-cov")
     session.run(
         "pytest", "tests",
         "-vv", "-rEPW",

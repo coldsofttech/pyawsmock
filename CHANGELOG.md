@@ -1,5 +1,7 @@
 # Version History
 
+- `0.1.4`: Introduced SQS - `create_queue`, `get_queue_url`, `set_queue_attributes`, `get_queue_attributes`,
+  `list_queues`, `purge_queue`, `delete_queue`, `send_message`, `send_message`, `delete_message`
 - `0.1.3`: Introduced CloudFront - `create_cloud_front_origin_access_identity`,
   `get_cloud_front_origin_access_identity`, `get_cloud_front_origin_access_identity_config`,
   `delete_cloud_front_origin_access_identity`, `create_distribution`, `get_distribution`, `get_distribution_config`,

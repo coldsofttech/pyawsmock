@@ -43,6 +43,10 @@ def client(service_name, region_name=None, **kwargs):
                 from pyawsmock.mocks.developer_tools.codeartifact.mock import MockCodeArtifact
 
                 return MockCodeArtifact(config.base_path, region_name=region_name)
+            elif service_name == "sqs":
+                from pyawsmock.mocks.application_integration.sqs.mock import MockSQS
+
+                return MockSQS(config.base_path, region_name=region_name)
             else:
                 raise NotImplementedError(f"Local Mock not implemented for {service_name}")
         else:

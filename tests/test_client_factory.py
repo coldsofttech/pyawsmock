@@ -4,6 +4,8 @@ import pytest
 
 from pyawsmock import configure_mock, cleanup_mock, client
 
+pytestmark = pytest.mark.order(1)
+
 
 @pytest.fixture
 def mock_config():
@@ -49,6 +51,7 @@ def test_client_cloudfront_not_configured(mock_config):
         ("ssm", "pyawsmock.mocks.management_and_governance.ssm.mock.MockSSM"),
         ("s3", "pyawsmock.mocks.storage.s3.mock.MockS3"),
         ("codeartifact", "pyawsmock.mocks.developer_tools.codeartifact.mock.MockCodeArtifact"),
+        ("sqs", "pyawsmock.mocks.application_integration.sqs.mock.MockSQS"),
     ],
 )
 def test_client_returns_other_mock_services(service_name, mock_class_path, mock_config):

@@ -9,6 +9,8 @@ import pytest
 
 from pyawsmock.mocks.storage.s3.mock import MockS3, compute_checksum
 
+pytestmark = pytest.mark.order(2)
+
 
 @pytest.fixture
 def s3(tmp_path):
@@ -497,7 +499,6 @@ def test_update_inventory_table_configuration_idempotent_update(s3_with_buckets)
     )
 
     resp = s3_with_buckets.get_bucket_metadata_configuration(Bucket="logs-bucket")
-    print(resp)
     inv_conf = resp["GetBucketMetadataConfigurationResult"]["MetadataConfigurationResult"][
         "InventoryTableConfigurationResult"]
 

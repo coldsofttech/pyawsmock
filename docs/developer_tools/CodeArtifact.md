@@ -1,12 +1,13 @@
-# 📦 MockCodeArtifact - Local CodeArtifact Mock
+# 🧱 MockCodeArtifact - Local CodeArtifact Mock
 
-**MockCodeArtifact** is a local mock implementation of AWS CodeArtifact, designed for testing and development purposes.
-It simulates
-repositories, domains, and packages with basic validation, publishing, and listing functionality—without interacting
-with the real AWS service.
+> **MockCodeArtifact** is a local mock implementation of AWS CodeArtifact, designed for testing and development
+> purposes.
+> It simulates
+> repositories, domains, and packages with basic validation, publishing, and listing functionality—without interacting
+> with the real AWS service.
 ---
 
-## 🌟 Highlights
+## ⚡ Highlights
 
 - Fully **local, file-based** mock for CodeArtifact.
 - Supports domains, repositories, packages, and versions.
@@ -17,7 +18,7 @@ with the real AWS service.
 
 ---
 
-## 📝 Overview
+## 🌿 Overview
 
 `MockCodeArtifact` provides an in-memory and filesystem-backed simulation of AWS CodeArtifact for testing purposes. It
 is suitable for:
@@ -30,7 +31,7 @@ is suitable for:
 > network endpoints and access control.
 ---
 
-## 🔑 Key Features
+## 🚀 Key Features
 
 | Feature       | Description                                                                       |
 |---------------|-----------------------------------------------------------------------------------|
@@ -57,6 +58,7 @@ configure_mock(mode="persistent", path="./local_ca")
 ca = client("codeartifact", region_name="local-us-east-1")
 ```
 
+> 🔑 `region_name` must start with `local-` for mock behavior; otherwise it delegates to real AWS.
 ---
 
 ## 🛠️ Methods & Examples
@@ -95,6 +97,7 @@ ca.list_domains(maxResults=10)
 ```
 
 Returns a paginated list of domains with `nextToken`.
+
 ---
 
 ### `create_repository`
@@ -109,6 +112,7 @@ print(resp)
 ```
 
 **Return**: Repository metadata including ARN, upstreams, and created time.
+
 ---
 
 ### `delete_repository`
@@ -118,6 +122,7 @@ ca.delete_repository(domain="test-domain", repository="sample-repo")
 ```
 
 Deletes repository and its contents.
+
 ---
 
 ### `describe_repository`
@@ -127,6 +132,7 @@ ca.describe_repository(domain="test-domain", repository="sample-repo")
 ```
 
 Returns detailed repository information.
+
 ---
 
 ### `get_authorization_token`
@@ -154,6 +160,7 @@ ca.get_repository_endpoint(domain="test-domain", repository="sample-repo", forma
 ```
 
 ⚠️ HTTPS endpoints **not supported** in local mock; returns HTTP URL only.
+
 ---
 
 ### `publish_package_version`
@@ -172,6 +179,7 @@ ca.publish_package_version(
 ```
 
 Publishes a package version to the repository.
+
 ---
 
 ### `list_packages`
@@ -181,6 +189,7 @@ ca.list_packages(domain="test-domain", repository="sample-repo", format="pypi")
 ```
 
 Paginated list of all packages in the repository.
+
 ---
 
 ### `describe_package`
@@ -190,6 +199,7 @@ ca.describe_package(domain="test-domain", repository="sample-repo", package="moc
 ```
 
 Returns metadata for a single package.
+
 ---
 
 ### `delete_package_versions`
@@ -230,6 +240,7 @@ ca.list_package_versions(
 ```
 
 Returns versions with metadata and optional pagination.
+
 ---
 
 ## ⚠️ Limitations (Mock-Specific)

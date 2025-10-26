@@ -11,6 +11,8 @@ import pytest
 
 from pyawsmock.mocks.developer_tools.codeartifact.mock import MockCodeArtifact
 
+pytestmark = pytest.mark.order(5)
+
 
 @pytest.fixture
 def codeartifact_with_empty_store(tmp_path):
