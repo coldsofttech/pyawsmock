@@ -1,11 +1,11 @@
 # 🌐 MockCloudFront - Local CloudFront Mock
 
-`MockCloudFront` is a local mock implementation of AWS CloudFront for testing and development. It simulates
-distributions and origin access identities (OAIs), allowing developers to test workflows without actual AWS access.
+> `MockCloudFront` is a local mock implementation of AWS CloudFront for testing and development. It simulates
+> distributions and origin access identities (OAIs), allowing developers to test workflows without actual AWS access.
 
 ---
 
-## 🌟 Highlights
+## ⚡ Highlights
 
 - ✅ Fully **local, file-based** CloudFront mock.
 - 🔒 Supports **Origin Access Identities** (OAI).
@@ -16,7 +16,7 @@ distributions and origin access identities (OAIs), allowing developers to test w
 
 ---
 
-## 📝 Overview
+## 🌿 Overview
 
 `MockCloudFront` simulates AWS CloudFront functionality locally:
 
@@ -31,7 +31,7 @@ distributions and origin access identities (OAIs), allowing developers to test w
 
 ---
 
-## 🔑 Key Features
+## 🚀 Key Features
 
 | Feature                | Description                                                     |
 |------------------------|-----------------------------------------------------------------|
@@ -45,7 +45,7 @@ distributions and origin access identities (OAIs), allowing developers to test w
 
 ---
 
-## ⚙️ Instantiation
+## 🏗️ Instantiation
 
 ```python
 from pyawsmock import configure_mock, client
@@ -101,6 +101,7 @@ cf.get_cloud_front_origin_access_identity(Id="E123ABCDEF45")
 ```
 
 Returns detailed OAI metadata.
+
 ---
 
 ### `get_cloud_front_origin_access_identity_config`
@@ -110,6 +111,7 @@ cf.get_cloud_front_origin_access_identity_config(Id="E123ABCDEF45")
 ```
 
 Returns the OAI configuration (`CallerReference` and `Comment`) with `ETag`.
+
 ---
 
 ### `delete_cloud_front_origin_access_identity`
@@ -119,6 +121,7 @@ cf.delete_cloud_front_origin_access_identity(Id="E123ABCDEF45", IfMatch="uuid-et
 ```
 
 Deletes the OAI after ETag validation.
+
 ---
 
 ### `create_distribution`
@@ -164,6 +167,7 @@ cf.get_distribution(Id="ED123ABCDEF45")
 ```
 
 Returns full distribution metadata including status, domain name, and active trusted signers.
+
 ---
 
 ### `get_distribution_config`
@@ -173,6 +177,7 @@ cf.get_distribution_config(Id="ED123ABCDEF45")
 ```
 
 Returns only the distribution configuration with `ETag`.
+
 ---
 
 ### `update_distribution`
@@ -191,6 +196,7 @@ cf.update_distribution(
 ```
 
 Updates distribution config and generates a new `ETag`.
+
 ---
 
 ### `delete_distribution`
@@ -206,9 +212,9 @@ cf.delete_distribution(Id="ED123ABCDEF45", IfMatch="new-uuid-etag")
 
 ## ⚠️ Limitations (Mock-Specific)
 
-- 🔒 Only **local JSON storage**; no real AWS integration.
-- ⚠️ DistributionConfig validation is **incomplete**; some AWS rules are not enforced.
-- ❌ No actual CDN network or cache propagation.
-- 🔑 OAIs and distributions **mock ETag-based concurrency**, but do not enforce AWS IAM policies.
-- ⚠️ CallerReference ensures idempotency only in the local mock.
-- 🚫 HTTPS endpoints or signed URLs are **not supported**.
+- Only **local JSON storage**; no real AWS integration.
+- DistributionConfig validation is **incomplete**; some AWS rules are not enforced.
+- No actual CDN network or cache propagation.
+- OAIs and distributions **mock ETag-based concurrency**, but do not enforce AWS IAM policies.
+- CallerReference ensures idempotency only in the local mock.
+- HTTPS endpoints or signed URLs are **not supported**.

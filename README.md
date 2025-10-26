@@ -19,6 +19,7 @@ using non-local regions.
 | ⚙️ **[SSM Parameter Store](docs/management_and_governance/SSM.md)**     | Local emulation of AWS SSM Parameters with versioning, labels, and encryption. |
 | 🧱 **[CodeArtifact](docs/developer_tools/CodeArtifact.md)**             | Domain & repository management with package versioning and mock endpoints.     |
 | 🌐 **[CloudFront](docs/networking_and_content_delivery/CloudFront.md)** | Create and manage distributions and origin access identities locally.          |
+| 📬 **[SQS](docs/application_integration/SQS.md)**                       | Local emulation of SQS with FIFO support.                                      |
 
 ---
 
@@ -99,7 +100,8 @@ print(response["Parameter"]["Value"])  # Output: demo_value
 cleanup_mock()
 ```
 
-> ⚡ All clients (SSM, S3, CodeArtifact, CloudFront) use the **same interface as boto3**. Switching between real AWS and
+> ⚡ All clients (SSM, S3, SQS, CodeArtifact, CloudFront) use the **same interface as boto3**. Switching between real AWS
+> and
 > local mock only depends on the region.
 
 ## 🧩 Supported Methods
@@ -110,8 +112,10 @@ cleanup_mock()
 | 🪣 S3                    | `create_bucket`, `upload_file`, `download_file`, `get_object`, `create_bucket_metadata_configuration`, `update_bucket_metadata_inventory_table_configuration`, `delete_bucket_metadata_configuration`, etc. |
 | 🧱 CodeArtifact          | `create_domain`, `create_repository`, `publish_package_version`, `list_packages`, `delete_package`, `get_authorization_token`, `get_repository_endpoint`, etc.                                              |
 | 🌐 CloudFront            | `create_distribution`, `get_distribution`, `get_distribution_config`, `update_distribution`, `delete_distribution`, etc.                                                                                    |
+| 📬 SQS                   | `create_queue`, `get_queue_url`, `set_queue_attributes`, `get_queue_attributes`, `list_queues`, `purge_queue`, etc.                                                                                         |
 
-> 🧩 More services coming soon: **DynamoDB**, **Lambda**, **CloudWatch**, **Config**, and **CloudTrail**.
+> 🧩 More services coming soon: **API Gateway**, **DynamoDB**, **Lambda**, **CloudWatch**, **Config**, and **CloudTrail
+**.
 
 ## ⚠️ Known Limitations
 
@@ -119,16 +123,17 @@ cleanup_mock()
 - **S3 multipart uploads** and full versioning are not implemented yet.
 - **CodeArtifact** currently supports only generic asset types and HTTP endpoints.
 - **CloudFront** distribution behavior is limited to configuration storage only.
+- **SQS** automatic background timers for `DelaySeconds` and `VisibilityTimeout` currently do not exist.
 
 ## 🧭 Roadmap
 
-| Status | Feature                                    |
-|--------|--------------------------------------------|
-| ✅      | 	SSM, S3, CodeArtifact, CloudFront support |
-| 🚧     | 	DynamoDB, Lambda, CloudWatch mocks        |
-| 🚧     | 	IAM simulation with multiple mock users   |
-| 🕓     | 	Enhanced audit logging & metrics          |
-| 🧩     | 	Multi-account & multi-region persistence  |
+| Status | Feature                                          |
+|--------|--------------------------------------------------|
+| ✅      | 	SSM, S3, SQS, CodeArtifact, CloudFront support  |
+| 🚧     | 	API Gateway, DynamoDB, Lambda, CloudWatch mocks |
+| 🚧     | 	IAM simulation with multiple mock users         |
+| 🕓     | 	Enhanced audit logging & metrics                |
+| 🧩     | 	Multi-account & multi-region persistence        |
 
 ## 🤝 Contributing
 

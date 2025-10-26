@@ -18,7 +18,7 @@
 
 ---
 
-## ✨ Key Features
+## 🚀 Key Features
 
 | Feature             | Description                                                             |
 |---------------------|-------------------------------------------------------------------------|
@@ -33,7 +33,7 @@
 
 ---
 
-## ⚙️ Instantiation
+## ️ 🏗️ Instantiation
 
 ```python
 from pyawsmock import configure_mock, client
@@ -48,7 +48,7 @@ ssm = client("ssm", region_name="local-us-east-1")
 > 🔑 `region_name` must start with `local-` for mock behavior; otherwise it delegates to real AWS.
 ---
 
-## 🧰 Methods & Examples
+## 🛠️ Methods & Examples
 
 ### `put_parameter`
 

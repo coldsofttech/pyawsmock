@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyawsmock"
-version = "0.1.3"
-description = "Local AWS Mock for Python – Mock SSM Parameter Store, S3, CodeArtifact, CloudFront, and extendable AWS services"
+version = "0.1.4"
+description = "Local AWS Mock for Python – Mock SSM Parameter Store, S3, SQS, CodeArtifact, CloudFront, and extendable AWS services"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "coldsofttech" }]

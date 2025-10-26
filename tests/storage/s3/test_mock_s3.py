@@ -497,7 +497,6 @@ def test_update_inventory_table_configuration_idempotent_update(s3_with_buckets)
     )
 
     resp = s3_with_buckets.get_bucket_metadata_configuration(Bucket="logs-bucket")
-    print(resp)
     inv_conf = resp["GetBucketMetadataConfigurationResult"]["MetadataConfigurationResult"][
         "InventoryTableConfigurationResult"]
 
