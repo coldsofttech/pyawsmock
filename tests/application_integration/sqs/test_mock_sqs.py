@@ -834,9 +834,15 @@ def test_send_message_with_custom_receipt_handle(sqs_with_empty_store):
 
 def test_receive_single_message(sqs_with_empty_store):
     queue_url = sqs_with_empty_store.create_queue(QueueName="test-queue")["QueueUrl"]
-    sqs_with_empty_store.send_message(QueueUrl=queue_url, MessageBody="Hello World")
+    sqs_with_empty_store.send_message(
+        QueueUrl=queue_url,
+        MessageBody="Hello World",
+        Attributes={
+            "VisibilityTimeout": 1
+        }
+    )
 
-    response = sqs_with_empty_store.receive_message(QueueUrl=queue_url)
+    response = sqs_with_empty_store.receive_message(QueueUrl=queue_url, WaitTimeSeconds=1)
     messages = response["Messages"]
 
     assert len(messages) == 1
@@ -850,9 +856,15 @@ def test_receive_single_message(sqs_with_empty_store):
 def test_receive_multiple_messages(sqs_with_empty_store):
     queue_url = sqs_with_empty_store.create_queue(QueueName="multi-queue")["QueueUrl"]
     for i in range(5):
-        sqs_with_empty_store.send_message(QueueUrl=queue_url, MessageBody=f"Msg {i}")
+        sqs_with_empty_store.send_message(
+            QueueUrl=queue_url,
+            MessageBody=f"Msg {i}",
+            Attributes={
+                "VisibilityTimeout": 1
+            }
+        )
 
-    response = sqs_with_empty_store.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=3)
+    response = sqs_with_empty_store.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=3, WaitTimeSeconds=1)
     messages = response["Messages"]
 
     assert len(messages) == 3
@@ -864,16 +876,22 @@ def test_receive_fifo_ordering(sqs_with_empty_store):
         QueueUrl=queue_url,
         MessageBody="Msg1",
         MessageGroupId="g1",
-        MessageDeduplicationId="dedup-1"
+        MessageDeduplicationId="dedup-1",
+        Attributes={
+            "VisibilityTimeout": 1
+        }
     )
     sqs_with_empty_store.send_message(
         QueueUrl=queue_url,
         MessageBody="Msg2",
         MessageGroupId="g1",
-        MessageDeduplicationId="dedup-2"
+        MessageDeduplicationId="dedup-2",
+        Attributes={
+            "VisibilityTimeout": 1
+        }
     )
 
-    response = sqs_with_empty_store.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=2)
+    response = sqs_with_empty_store.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=2, WaitTimeSeconds=1)
     messages = response["Messages"]
     assert messages[0]["MessageGroupId"] == "g1"
     assert int(messages[0]["SequenceNumber"]) < int(messages[1]["SequenceNumber"])
@@ -883,29 +901,42 @@ def test_visibility_timeout(sqs_with_empty_store):
     queue_url = sqs_with_empty_store.create_queue(
         QueueName="timeout-queue",
         Attributes={
-            "VisibilityTimeout": 10
+            "VisibilityTimeout": 1
         },
     )["QueueUrl"]
-    sqs_with_empty_store.send_message(QueueUrl=queue_url, MessageBody="Test")
+    sqs_with_empty_store.send_message(
+        QueueUrl=queue_url,
+        MessageBody="Test",
+        Attributes={
+            "VisibilityTimeout": 1
+        },
+    )
 
-    resp1 = sqs_with_empty_store.receive_message(QueueUrl=queue_url)
+    resp1 = sqs_with_empty_store.receive_message(QueueUrl=queue_url, WaitTimeSeconds=1)
     assert len(resp1["Messages"]) == 1
 
-    time.sleep(11)
-    resp3 = sqs_with_empty_store.receive_message(QueueUrl=queue_url)
+    time.sleep(1.1)
+    resp3 = sqs_with_empty_store.receive_message(QueueUrl=queue_url, WaitTimeSeconds=1)
     assert len(resp3["Messages"]) == 1
     assert resp3["Messages"][0]["Attributes"]["ApproximateReceiveCount"] == "2"
 
 
 def test_message_delay(sqs_with_empty_store):
     queue_url = sqs_with_empty_store.create_queue(QueueName="delay-queue")["QueueUrl"]
-    sqs_with_empty_store.send_message(QueueUrl=queue_url, MessageBody="Delayed", DelaySeconds=2)
+    sqs_with_empty_store.send_message(
+        QueueUrl=queue_url,
+        MessageBody="Delayed",
+        DelaySeconds=2,
+        Attributes={
+            "VisibilityTimeout": 1
+        },
+    )
 
-    resp1 = sqs_with_empty_store.receive_message(QueueUrl=queue_url)
+    resp1 = sqs_with_empty_store.receive_message(QueueUrl=queue_url, WaitTimeSeconds=1)
     assert len(resp1.get("Messages", [])) == 0  # not visible yet
 
     time.sleep(2.1)
-    resp2 = sqs_with_empty_store.receive_message(QueueUrl=queue_url)
+    resp2 = sqs_with_empty_store.receive_message(QueueUrl=queue_url, WaitTimeSeconds=1)
     assert len(resp2["Messages"]) == 1
 
 
@@ -914,11 +945,16 @@ def test_message_attributes(sqs_with_empty_store):
     sqs_with_empty_store.send_message(
         QueueUrl=queue_url,
         MessageBody="AttrTest",
-        MessageAttributes={"foo": {"StringValue": "bar", "DataType": "String"}}
+        MessageAttributes={"foo": {"StringValue": "bar", "DataType": "String"}},
+        Attributes={
+            "VisibilityTimeout": 1
+        },
     )
 
     resp = sqs_with_empty_store.receive_message(
-        QueueUrl=queue_url, MessageAttributeNames=["foo"]
+        QueueUrl=queue_url,
+        MessageAttributeNames=["foo"],
+        WaitTimeSeconds=1
     )
     msg = resp["Messages"][0]
     assert "foo" in msg["MessageAttributes"]
@@ -926,11 +962,18 @@ def test_message_attributes(sqs_with_empty_store):
 
 def test_system_attributes(sqs_with_empty_store):
     queue_url = sqs_with_empty_store.create_queue(QueueName="sysattr-queue")["QueueUrl"]
-    sqs_with_empty_store.send_message(QueueUrl=queue_url, MessageBody="SysAttrTest")
+    sqs_with_empty_store.send_message(
+        QueueUrl=queue_url,
+        MessageBody="SysAttrTest",
+        Attributes={
+            "VisibilityTimeout": 1
+        },
+    )
 
     resp = sqs_with_empty_store.receive_message(
         QueueUrl=queue_url,
-        MessageSystemAttributeNames=["All"]
+        MessageSystemAttributeNames=["All"],
+        WaitTimeSeconds=1
     )
     msg = resp["Messages"][0]
     assert "ApproximateReceiveCount" in msg["Attributes"]
@@ -940,12 +983,22 @@ def test_system_attributes(sqs_with_empty_store):
 def test_receive_request_attempt_id(sqs_with_empty_store):
     queue_url = sqs_with_empty_store.create_queue(QueueName="fifo-test.fifo", FifoQueue=True)["QueueUrl"]
     sqs_with_empty_store.send_message(
-        QueueUrl=queue_url, MessageBody="RetryTest", MessageGroupId="g1", MessageDeduplicationId="dedup-1"
+        QueueUrl=queue_url,
+        MessageBody="RetryTest",
+        MessageGroupId="g1",
+        MessageDeduplicationId="dedup-1",
+        Attributes={
+            "VisibilityTimeout": 1
+        },
     )
 
     attempt_id = "attempt123"
-    resp1 = sqs_with_empty_store.receive_message(QueueUrl=queue_url, ReceiveRequestAttemptId=attempt_id)
-    resp2 = sqs_with_empty_store.receive_message(QueueUrl=queue_url, ReceiveRequestAttemptId=attempt_id)
+    resp1 = sqs_with_empty_store.receive_message(
+        QueueUrl=queue_url, ReceiveRequestAttemptId=attempt_id, WaitTimeSeconds=1
+    )
+    resp2 = sqs_with_empty_store.receive_message(
+        QueueUrl=queue_url, ReceiveRequestAttemptId=attempt_id, WaitTimeSeconds=1
+    )
 
     assert resp1["Messages"][0]["ReceiptHandle"] == resp2["Messages"][0]["ReceiptHandle"]
 
