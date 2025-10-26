@@ -4,6 +4,8 @@ import pytest
 
 from pyawsmock import configure_mock, cleanup_mock, client
 
+pytestmark = pytest.mark.order(1)
+
 
 @pytest.fixture
 def mock_config():

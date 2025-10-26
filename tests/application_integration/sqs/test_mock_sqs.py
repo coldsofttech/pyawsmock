@@ -9,6 +9,8 @@ import pytest
 
 from pyawsmock.mocks.application_integration.sqs.mock import MockSQS
 
+pytestmark = pytest.mark.order(6)
+
 
 @pytest.fixture
 def sqs_with_empty_store(tmp_path):

@@ -9,6 +9,8 @@ import pytest
 
 from pyawsmock.mocks.storage.s3.mock import MockS3, compute_checksum
 
+pytestmark = pytest.mark.order(2)
+
 
 @pytest.fixture
 def s3(tmp_path):

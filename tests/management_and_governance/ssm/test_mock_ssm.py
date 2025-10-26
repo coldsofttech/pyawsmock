@@ -6,6 +6,8 @@ import pytest
 
 from pyawsmock.mocks.management_and_governance.ssm.mock import MockSSM
 
+pytestmark = pytest.mark.order(3)
+
 
 @pytest.fixture
 def temp_store(tmp_path):
